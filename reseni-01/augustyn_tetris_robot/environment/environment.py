@@ -7,15 +7,17 @@ from augustyn_tetris_robot.fake_np.vectors import Colors, Vec2
 
 
 class Environment:
+    simulation: bool
     objects: list[EnvironmentObject]
     robot: Robot
 
-    def __init__(self, objects: list[EnvironmentObject], robot: Robot) -> None:
+    def __init__(self, simulation: bool, objects: list[EnvironmentObject], robot: Robot) -> None:
+        self.simulation = simulation
         self.objects = objects
         self.robot = robot
 
     @classmethod
-    def normal(cls):
+    def normal(cls, *, simulation: bool) -> "Environment":
         rows: list[float] = [300 + i * 270 for i in range(5)]
         cols: list[float] = [195 + 289 + i * 193 for i in range(4)]
         blocks: list[list[Block]] = [
@@ -47,36 +49,51 @@ class Environment:
                     fill=Colors.WHITE,
                 ))
 
-        return cls([
-            # Walls
-            *walls,
-            # Black line
-            EnvironmentObject(
-                MultiLine([
-                    # Vertical
-                    Line(Vec2(195, 300), Vec2(195, 1680 - 150)),
-                    # Horizontal
-                    *[
-                        Line(Vec2(195, 300 + 270 * i), Vec2(195 + 289 + 193 * 3, 300 + 270 * i))
-                        for i in range(5)
-                    ],
-                ]),
-                EnvironmentObject.TYPE_LINE,
-                stroke=20,
-                stroke_color=Colors.BLACK,
-            ),
-            # Vertical yellow lines
-            EnvironmentObject(
-                MultiLine([
-                    Line(Vec2(195 + 289 + 193 * i, 300), Vec2(195 + 289 + 193 * i, 300 + 270 * 4))
-                    for i in range(4)
-                ]),
-                EnvironmentObject.TYPE_LINE,
-                stroke=20 / 3,
-                stroke_color=Colors.YELLOW,
-            ),
-            # Block outlines
-            *block_outlines_translated,
-            # Blocks
-            *blocks_translated,
-        ], Robot(Vec2(1260 / 2, 1680 - 400)))
+        return cls(
+            simulation,
+            [
+                # Walls
+                *walls,
+                # Vertical yellow lines
+                EnvironmentObject(
+                    MultiLine([
+                        Line(Vec2(195 + 289 + 193 * i, 300),
+                             Vec2(195 + 289 + 193 * i, 300 + 270 * 4))
+                        for i in range(4)
+                    ]),
+                    EnvironmentObject.TYPE_LINE,
+                    stroke=20 / 3,
+                    stroke_color=Colors.YELLOW,
+                ),
+                # Target yellow area
+                EnvironmentObject(
+                    Rectangle
+                    .from_top_left_width_height(1680 - 400, 0, 400, 400)
+                    .translated(Vec2(10, -10)),
+                    EnvironmentObject.TYPE_LINE,
+                    stroke=20 / 3,
+                    stroke_color=Colors.YELLOW,
+                ),
+                # Block outlines
+                *block_outlines_translated,
+                # Black line
+                EnvironmentObject(
+                    MultiLine([
+                        # Vertical
+                        Line(Vec2(195, 300), Vec2(195, 1680 - 150)),
+                        # Horizontal
+                        *[
+                            Line(Vec2(195, 300 + 270 * i), Vec2(195 + 289 + 193 * 3, 300 + 270 * i))
+                            for i in range(5)
+                        ],
+                    ]),
+                    EnvironmentObject.TYPE_LINE,
+                    stroke=20,
+                    stroke_color=Colors.BLACK,
+                ),
+                # Blocks
+                *blocks_translated,
+            ],
+            # Robot(Vec2(1260 / 2, 1680 - 400))
+            Robot(Vec2(1260 / 2, 1680 / 2))
+        )

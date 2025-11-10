@@ -6,6 +6,7 @@ import random
 
 from augustyn_tetris_robot.environment.environment import Environment
 from augustyn_tetris_robot.environment.objects import EnvironmentObject
+from augustyn_tetris_robot.environment.sensors import SensorReading
 from augustyn_tetris_robot.fake_np.vectors import Vec2, Colors
 
 _WITH_HITBOX: tuple[int, ...] = (EnvironmentObject.TYPE_WALL, EnvironmentObject.TYPE_BLOCK,
@@ -24,7 +25,22 @@ _MIN_MOVEMENT_THRESHOLD: float = 0.5
 _ROTATION_FACTOR: float = 0.01
 
 
-def step(environment: Environment) -> None:
+def step(environment: Environment, sensors: SensorReading, sensor_diff: SensorReading) -> None:
+    # Robot movement
+    delta_robot_pos, delta_robot_angle = rotate_wheels(
+        environment.robot.origin,
+        environment.robot.wheels,
+        (sensor_diff.left_wheel_angle, sensor_diff.right_wheel_angle),
+        (environment.robot.wheel_diameter, environment.robot.wheel_diameter)
+    )
+    environment.robot.translation += delta_robot_pos
+    environment.robot.rotation += delta_robot_angle
+
+    # Robot part pusher
+    # https://medium.com/kidstronics/lego-gears-worms-bf8ef3280d0e#6699
+    environment.robot.part_pusher_rotation += sensor_diff.part_pusher_angle / 24  # 1:24
+
+    # The real physics
     resolve_collisions(environment)
 
 
@@ -95,3 +111,39 @@ def resolve_collisions(environment: Environment) -> None:
             obj.geom = obj.geom.translated(translation)
             if rotation_angle != 0:
                 obj.geom = obj.geom.copy_rotated(obj.geom.centroid(), rotation_angle)
+
+
+def rotate_wheels(origin: Vec2, wheels: tuple[Vec2, Vec2], angles: tuple[float, float],
+                  diameters: tuple[float, float]) -> tuple[Vec2, float]:
+    """
+    Simulates the two wheels rotating by certain angles (in radians).
+
+    Returns the delta of the entire robot's position and the delta of its rotation around the origin.
+
+    Author: ČetDžíPíTý ofc
+    """
+
+    s1 = angles[0] * diameters[0] / 2
+    s2 = angles[1] * diameters[1] / 2
+    L = (wheels[0] - wheels[1]).length()
+
+    # rozdíl dráhy -> rotace robota
+    if abs(s2 - s1) < 1e-9:
+        # rovný pohyb vpřed
+        forward = ((wheels[0] + wheels[1]) / 2 - origin).normalized()
+        delta_pos = forward * ((s1 + s2) / 2)
+        delta_angle = 0.0
+    else:
+        delta_angle = (s2 - s1) / L
+        R = (L / 2) * (s1 + s2) / (s2 - s1)
+
+        # posun středu robota relativně k jeho směru
+        dx = math.sin(delta_angle) * R
+        dy = R * (1 - math.cos(delta_angle))
+
+        forward = ((wheels[0] + wheels[1]) / 2 - origin).normalized()
+        right = Vec2(forward.y, -forward.x)
+
+        delta_pos = forward * dy + right * dx
+
+    return delta_pos, delta_angle

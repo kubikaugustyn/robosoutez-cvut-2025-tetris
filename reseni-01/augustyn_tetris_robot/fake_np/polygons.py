@@ -5,9 +5,11 @@ import math  # This is like the only micropython module
 
 from augustyn_tetris_robot.fake_np.vectors import Vec2, Scalar
 
+
 def _ccw(p1: Vec2, p2: Vec2, p3: Vec2) -> bool:
     """Vrátí True, pokud body p1, p2, p3 jsou proti směru hodinových ručiček"""
     return (p3.y - p1.y) * (p2.x - p1.x) > (p2.y - p1.y) * (p3.x - p1.x)
+
 
 def _segments_intersect(a1: Vec2, b1: Vec2, a2: Vec2, b2: Vec2) -> bool:
     """Zjistí, jestli se protínají úsečky a1-b1 a a2-b2"""
@@ -111,7 +113,7 @@ class Polygon(AbstractPolygon):
         return [self]
 
     def edges(self) -> list[tuple[Vec2, Vec2]]:
-        vertices:list[Vec2] = self.vertices()
+        vertices: list[Vec2] = self.vertices()
         edges: list[tuple[Vec2, Vec2]] = []
         for i in range(len(vertices) - 1):
             edges.append((vertices[i], vertices[i + 1]))
@@ -179,7 +181,7 @@ class MultiLine(MultiPolygon):
         super().__init__(lines, translation)
 
     def translated(self, translation: Vec2) -> "AbstractPolygon":
-        return MultiLine(self._polygons, translation)
+        return MultiLine(self._polygons, self._translation + translation)
 
 
 class Rectangle(Polygon):

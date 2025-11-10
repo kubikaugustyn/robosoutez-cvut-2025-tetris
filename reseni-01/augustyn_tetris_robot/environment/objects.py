@@ -68,13 +68,21 @@ class Blocks:
 class Robot:
     rotation: float  # in radians # FIXME Use the rotation
     translation: Vec2
+    origin: Vec2
     base_geom: AbstractPolygon
 
     # Moving claw
     part_pusher_rotation: float
     # Pusher, axle1, axle2
     part_pusher_starting: tuple[AbstractPolygon, AbstractPolygon, AbstractPolygon]
-    part_pusher_joints: tuple[None, Vec2, Vec2] = (None, Vec2(0, 0), Vec2(0, 90))
+    part_pusher_joints: tuple[None, Vec2, Vec2]
+    # Color sensor
+    color_sensor: Vec2  # Origin
+    # Distance sensor
+    distance_sensor: tuple[Vec2, Vec2]  # Origin, direction normalized vector
+    # Wheels
+    wheels: tuple[Vec2, Vec2]  # Translations from the origin
+    wheel_diameter: Scalar = 56
 
     def __init__(self, origin: Vec2) -> None:
         self.translation = origin
@@ -83,20 +91,36 @@ class Robot:
         self._generate_geom()
 
     def _generate_geom(self) -> None:
-        self.part_pusher_starting = (
-            Line(Vec2(260, 180), Vec2(260, 0)),
-            Line(Vec2(0, 0), Vec2(260, 0)),
-            Line(Vec2(0, 90), Vec2(260, 90))
-        )
+        self.origin = Vec2(0, 0)  # In the middle of the wheels
+
+        static_claw_origin: Vec2 = Vec2(- 200 / 2, -92)  # Bottom left corner
+        part_pusher_origin: Vec2 = static_claw_origin + Vec2(0, -112)  # Top left corner
+        self.part_pusher_starting = tuple(map(lambda x: x.translated(part_pusher_origin), (
+            Line(Vec2(150, 112), Vec2(150, 0)),
+            Line(Vec2(0, 0), Vec2(150, 0)),
+            Line(Vec2(0, 48), Vec2(150, 48))
+        )))
+        self.part_pusher_joints = (None, part_pusher_origin, part_pusher_origin + Vec2(0, 48))
+
+        self.color_sensor = Vec2(0, -72)
+
+        self.distance_sensor = (Vec2(0, -230), Vec2(0, -1))
+
+        self.wheels = (Vec2(-184 / 2, 0), Vec2(184 / 2, 0))
+
         self.base_geom = MultiPolygon([
             # Wheels and stuff
-            Rectangle.from_top_left_width_height(200, 0, 300, 100),
+            Rectangle.from_top_left_width_height(-55 / 2, -215 / 2, 215, 55),
+            MultiLine([
+                Line(Vec2(-48, -55 / 2), static_claw_origin),
+                Line(Vec2(48, -55 / 2), static_claw_origin + Vec2(200, 0)),
+            ]),
             # The static claw part
             MultiLine([
-                Line(Vec2(0, 180), Vec2(0, 0)),
-                Line(Vec2(0, 180), Vec2(300, 180)),
-                Line(Vec2(300, 180), Vec2(300, 0)),
-            ]),
+                Line(Vec2(0, -112), Vec2(0, 0)),
+                Line(Vec2(0, 0), Vec2(200, 0)),
+                Line(Vec2(200, 0), Vec2(200, -140)),
+            ]).translated(static_claw_origin),
             # The moving claw part is added in as_object()
         ])
 
@@ -114,7 +138,7 @@ class Robot:
             *self.part_pusher
         ])
         if self.rotation != 0:
-            geom = geom.copy_rotated(Vec2(150, 150), self.rotation)
+            geom = geom.copy_rotated(self.origin, self.rotation)
         return geom.translated(self.translation)
 
     @property
