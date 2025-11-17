@@ -1,9 +1,12 @@
 #  -*- coding: utf-8 -*-
 __author__ = "Jakub Augustýn <kubik.augustyn@post.cz>"
 
-from augustyn_tetris_robot.fake_np.polygons import AbstractPolygon, Rectangle, MultiPolygon, \
+import math
+from time import time
+
+from augustyn_tetris_robot.fake_np.polygons import Rectangle, MultiPolygon, \
     MultiLine, Line
-from augustyn_tetris_robot.fake_np.vectors import Color, Colors, Vec2, Scalar
+from augustyn_tetris_robot.fake_np.vectors import Colors, Vec2
 
 
 class EnvironmentObject:
@@ -12,14 +15,7 @@ class EnvironmentObject:
     TYPE_LINE = 3
     TYPE_ROBOT = 4
 
-    geom: AbstractPolygon
-    type_: int
-    stroke: Scalar | None
-    stroke_color: Color | None
-    fill: Color | None
-
-    def __init__(self, geom: AbstractPolygon, type_: int, *, stroke: Scalar | None = None,
-                 stroke_color: Color | None = None, fill: Color | None = None) -> None:
+    def __init__(self, geom, type_, *, stroke=None, stroke_color=None, fill=None):
         self.geom = geom
         self.type_ = type_
         self.stroke = stroke
@@ -27,19 +23,19 @@ class EnvironmentObject:
         self.stroke_color = stroke_color
         self.fill = fill
 
-    def translated(self, translation: Vec2) -> "EnvironmentObject":
+    def translated(self, translation):
         return EnvironmentObject(self.geom.translated(translation), self.type_, stroke=self.stroke,
                                  stroke_color=self.stroke_color, fill=self.fill)
 
 
 class Block(EnvironmentObject):
-    def __init__(self, geom_str: str, origin: Vec2, color: Color) -> None:
+    def __init__(self, geom_str, origin, color):
         super().__init__(self._generate_geom(geom_str).translated(origin * 40),
                          EnvironmentObject.TYPE_BLOCK, fill=color)
 
     @staticmethod
-    def _generate_geom(geom_str: str) -> AbstractPolygon:
-        rectangles: list[Rectangle] = []
+    def _generate_geom(geom_str):
+        rectangles = []  # list[Rectangle]
         for y, line in enumerate(geom_str.split("\n")):
             for x, char in enumerate(line):
                 if char == "#":
@@ -47,10 +43,10 @@ class Block(EnvironmentObject):
                 elif char == " ":
                     pass
                 else:
-                    raise ValueError(f"Unknown character in geometry: '{char}'")
+                    raise ValueError("Unknown character in geometry: '{}'".format(char))
         return MultiPolygon(rectangles)
 
-    def outline(self) -> EnvironmentObject:
+    def outline(self):
         return EnvironmentObject(self.geom, EnvironmentObject.TYPE_LINE, stroke=20 / 6,
                                  stroke_color=self.fill)
 
@@ -66,35 +62,17 @@ class Blocks:
 
 
 class Robot:
-    rotation: float  # in radians # FIXME Use the rotation
-    translation: Vec2
-    origin: Vec2
-    base_geom: AbstractPolygon
+    wheel_diameter = 56
 
-    # Moving claw
-    part_pusher_rotation: float
-    # Pusher, axle1, axle2
-    part_pusher_starting: tuple[AbstractPolygon, AbstractPolygon, AbstractPolygon]
-    part_pusher_joints: tuple[None, Vec2, Vec2]
-    # Color sensor
-    color_sensor: Vec2  # Origin
-    # Distance sensor
-    distance_sensor: tuple[Vec2, Vec2]  # Origin, direction normalized vector
-    # Wheels
-    wheels: tuple[Vec2, Vec2]  # Translations from the origin
-    wheel_diameter: Scalar = 56
-
-    def __init__(self, origin: Vec2) -> None:
+    def __init__(self, origin):
         self.translation = origin
         self.rotation = 0
         self.part_pusher_rotation = 0
         self._generate_geom()
 
-    def _generate_geom(self) -> None:
-        self.origin = Vec2(0, 0)  # In the middle of the wheels
-
-        static_claw_origin: Vec2 = Vec2(- 200 / 2, -92)  # Bottom left corner
-        part_pusher_origin: Vec2 = static_claw_origin + Vec2(0, -112)  # Top left corner
+    def _generate_geom(self):
+        static_claw_origin = Vec2(- 200 / 2, -92)  # Bottom left corner
+        part_pusher_origin = static_claw_origin + Vec2(0, -112)  # Top left corner
         self.part_pusher_starting = tuple(map(lambda x: x.translated(part_pusher_origin), (
             Line(Vec2(150, 112), Vec2(150, 0)),
             Line(Vec2(0, 0), Vec2(150, 0)),
@@ -124,7 +102,7 @@ class Robot:
             # The moving claw part is added in as_object()
         ])
 
-    def as_object(self) -> EnvironmentObject:
+    def as_object(self):
         return EnvironmentObject(
             self.geom,
             EnvironmentObject.TYPE_ROBOT,
@@ -132,17 +110,17 @@ class Robot:
         )
 
     @property
-    def geom(self) -> AbstractPolygon:
-        geom: AbstractPolygon = MultiPolygon([
-            self.base_geom,
-            *self.part_pusher
-        ])
+    def geom(self):
+        geom = MultiPolygon(
+            [self.base_geom] +
+            list(self.part_pusher),
+        )
         if self.rotation != 0:
-            geom = geom.copy_rotated(self.origin, self.rotation)
+            geom = geom.copy_rotated(Vec2(0, 0), self.rotation)
         return geom.translated(self.translation)
 
     @property
-    def part_pusher(self) -> tuple[AbstractPolygon, AbstractPolygon, AbstractPolygon]:
+    def part_pusher(self):
         axle1 = self.part_pusher_starting[1].copy_rotated(self.part_pusher_joints[1],
                                                           self.part_pusher_rotation)
         axle2 = self.part_pusher_starting[2].copy_rotated(self.part_pusher_joints[2],

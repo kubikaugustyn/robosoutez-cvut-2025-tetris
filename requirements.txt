@@ -1,3 +1,4 @@
 opencv-python
 numpy
-pybricks
+pybricks==2.0.0 # Corresponds with the version of Pybricks / ev3dev we have on out EV3
+PyMuPDF

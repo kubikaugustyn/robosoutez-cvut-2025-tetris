@@ -9,39 +9,58 @@ from augustyn_tetris_robot.environment.objects import EnvironmentObject
 from augustyn_tetris_robot.environment.sensors import SensorReading
 from augustyn_tetris_robot.fake_np.vectors import Vec2, Colors
 
-_WITH_HITBOX: tuple[int, ...] = (EnvironmentObject.TYPE_WALL, EnvironmentObject.TYPE_BLOCK,
-                                 EnvironmentObject.TYPE_ROBOT)
-_FRICTION: dict[int, float] = {
+_WITH_HITBOX = (EnvironmentObject.TYPE_WALL, EnvironmentObject.TYPE_BLOCK,
+                EnvironmentObject.TYPE_ROBOT)
+_FRICTION = {
     EnvironmentObject.TYPE_WALL: float("inf"),
     EnvironmentObject.TYPE_BLOCK: 0.1,
     EnvironmentObject.TYPE_ROBOT: 0.9,
 }
-_SPEED_FACTOR: dict[int, float] = {
+_SPEED_FACTOR = {
     EnvironmentObject.TYPE_WALL: 0.1,
     EnvironmentObject.TYPE_BLOCK: 0.01,
     EnvironmentObject.TYPE_ROBOT: 0.01,
 }
-_MIN_MOVEMENT_THRESHOLD: float = 0.5
-_ROTATION_FACTOR: float = 0.01
+_MIN_MOVEMENT_THRESHOLD = 0.5
+_ROTATION_FACTOR = 0.01
 
 
-def step(environment: Environment, sensors: SensorReading, sensor_diff: SensorReading) -> None:
+def step(environment, sensors, sensor_diff):
     # Robot movement
-    delta_robot_pos, delta_robot_angle = rotate_wheels(
-        environment.robot.origin,
-        environment.robot.wheels,
-        (sensor_diff.left_wheel_angle, sensor_diff.right_wheel_angle),
-        (environment.robot.wheel_diameter, environment.robot.wheel_diameter)
-    )
-    environment.robot.translation += delta_robot_pos
-    environment.robot.rotation += delta_robot_angle
+    # delta_robot_pos, delta_robot_angle = rotate_wheels(
+    #     environment.robot.origin,
+    #     environment.robot.wheels,
+    #     (sensor_diff.left_wheel_angle, sensor_diff.right_wheel_angle),
+    #     (environment.robot.wheel_diameter, environment.robot.wheel_diameter)
+    # )
+    # print("Angles: left {:.5f} right {:.5f}".format(sensor_diff.left_wheel_angle,
+    #                                                 sensor_diff.right_wheel_angle))
+    # print("Robot moves by {} and turns by {:.5f}".format(repr(delta_robot_pos), delta_robot_angle))
+    # environment.robot.translation += delta_robot_pos
+    # environment.robot.rotation += delta_robot_angle
+    if sensor_diff.distance_driven != 0 or sensors.rotation_angle != 0:
+        if math.fabs(sensors.rotation_angle) <= 1e-6:
+            delta_robot_pos = Vec2(0, -sensor_diff.distance_driven)
+        else:
+            delta_robot_pos = Vec2(
+                sensor_diff.distance_driven * math.sin(sensors.rotation_angle),
+                -sensor_diff.distance_driven * math.cos(sensors.rotation_angle),
+            )
+        environment.robot.translation += delta_robot_pos
+        environment.robot.rotation = sensors.rotation_angle
+        print("Distance {} and angle {:.1f}deg".format(sensors.distance_driven,
+                                                       math.degrees(sensors.rotation_angle)))
+        print("Robot moves by {} and turns by {:.1f}deg".format(repr(delta_robot_pos),
+                                                                math.degrees(
+                                                                    sensor_diff.rotation_angle)))
+    print("Robot position: {}".format(repr(environment.robot.translation)))
 
     # Robot part pusher
     # https://medium.com/kidstronics/lego-gears-worms-bf8ef3280d0e#6699
     environment.robot.part_pusher_rotation += sensor_diff.part_pusher_angle / 24  # 1:24
 
-    # The real physics
-    resolve_collisions(environment)
+    # The real physics - DISABLED
+    # resolve_collisions(environment)
 
 
 """def resolve_collisions(environment: Environment) -> None:
@@ -72,9 +91,9 @@ def step(environment: Environment, sensors: SensorReading, sensor_diff: SensorRe
             obj.geom = obj.geom.translated(translation)"""
 
 
-def resolve_collisions(environment: Environment) -> None:
-    robot_object: EnvironmentObject = environment.robot.as_object()
-    objects: list[EnvironmentObject] = [*environment.objects, robot_object]
+def resolve_collisions(environment):
+    robot_object = environment.robot.as_object()
+    objects = environment.objects + [robot_object]  # list[EnvironmentObject]
     objects = list(filter(lambda o: o.type_ in _WITH_HITBOX, objects))
 
     for obj in objects:
@@ -87,16 +106,16 @@ def resolve_collisions(environment: Environment) -> None:
         for other in objects:
             if obj is other:
                 continue
-            check_edges: bool = obj.fill is None or other.fill is None
+            check_edges = bool(obj.fill is None or other.fill is None)
             if obj.geom.intersects(other.geom, checkBBoxes=not check_edges, checkEdges=check_edges):
-                push_vec: Vec2 = (obj.geom.centroid() - other.geom.centroid()).normalized()
+                push_vec = (obj.geom.centroid() - other.geom.centroid()).normalized()
                 depth = obj.geom.penetration_depth(other.geom)
                 random_factor = random.randint(10000, 10500) / 10000
-                k: float = depth * _SPEED_FACTOR[other.type_] * random_factor / friction
+                k = depth * _SPEED_FACTOR[other.type_] * random_factor / friction
                 translation += push_vec * k
 
                 # Rotace
-                lever: float = (obj.geom.centroid() - other.geom.centroid()).length()
+                lever = (obj.geom.centroid() - other.geom.centroid()).length()
                 torque = depth * _ROTATION_FACTOR / (friction * max(lever, 1e-6))
                 direction = 1 if random.random() > 0.5 else -1  # náhodně doleva/doprava
                 rotation_angle += torque * direction
@@ -113,8 +132,7 @@ def resolve_collisions(environment: Environment) -> None:
                 obj.geom = obj.geom.copy_rotated(obj.geom.centroid(), rotation_angle)
 
 
-def rotate_wheels(origin: Vec2, wheels: tuple[Vec2, Vec2], angles: tuple[float, float],
-                  diameters: tuple[float, float]) -> tuple[Vec2, float]:
+def rotate_wheels(origin, wheels, angles, diameters):
     """
     Simulates the two wheels rotating by certain angles (in radians).
 
@@ -126,11 +144,11 @@ def rotate_wheels(origin: Vec2, wheels: tuple[Vec2, Vec2], angles: tuple[float, 
     s1 = angles[0] * diameters[0] / 2
     s2 = angles[1] * diameters[1] / 2
     L = (wheels[0] - wheels[1]).length()
+    forward = ((wheels[0] + wheels[1]) / 2 - origin).normalized()
 
     # rozdíl dráhy -> rotace robota
     if abs(s2 - s1) < 1e-9:
         # rovný pohyb vpřed
-        forward = ((wheels[0] + wheels[1]) / 2 - origin).normalized()
         delta_pos = forward * ((s1 + s2) / 2)
         delta_angle = 0.0
     else:
@@ -141,7 +159,6 @@ def rotate_wheels(origin: Vec2, wheels: tuple[Vec2, Vec2], angles: tuple[float, 
         dx = math.sin(delta_angle) * R
         dy = R * (1 - math.cos(delta_angle))
 
-        forward = ((wheels[0] + wheels[1]) / 2 - origin).normalized()
         right = Vec2(forward.y, -forward.x)
 
         delta_pos = forward * dy + right * dx

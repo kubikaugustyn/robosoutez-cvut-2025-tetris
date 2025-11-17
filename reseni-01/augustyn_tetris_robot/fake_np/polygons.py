@@ -3,35 +3,33 @@ __author__ = "Jakub Augustýn <kubik.augustyn@post.cz>"
 
 import math  # This is like the only micropython module
 
-from augustyn_tetris_robot.fake_np.vectors import Vec2, Scalar
+from augustyn_tetris_robot.fake_np.vectors import Vec2
 
 
-def _ccw(p1: Vec2, p2: Vec2, p3: Vec2) -> bool:
+def _ccw(p1, p2, p3):
     """Vrátí True, pokud body p1, p2, p3 jsou proti směru hodinových ručiček"""
     return (p3.y - p1.y) * (p2.x - p1.x) > (p2.y - p1.y) * (p3.x - p1.x)
 
 
-def _segments_intersect(a1: Vec2, b1: Vec2, a2: Vec2, b2: Vec2) -> bool:
+def _segments_intersect(a1, b1, a2, b2):
     """Zjistí, jestli se protínají úsečky a1-b1 a a2-b2"""
     return _ccw(a1, a2, b2) != _ccw(b1, a2, b2) and _ccw(a1, b1, a2) != _ccw(a1, b1, b2)
 
 
 class AbstractPolygon:
-    _translation: Vec2
-
-    def __init__(self, translation: Vec2 | None = None) -> None:
+    def __init__(self, translation=None):
         self._translation = translation or Vec2(0, 0)
 
-    def vertices(self) -> list[Vec2]:
-        raise NotImplementedError(f"{type(self).__name__} doesn't implement vertices()")
+    def vertices(self):
+        raise NotImplementedError("{} doesn't implement vertices()".format(type(self).__name__))
 
-    def polygons(self) -> list["AbstractPolygon"]:
-        raise NotImplementedError(f"{type(self).__name__} doesn't implement polygons()")
+    def polygons(self):
+        raise NotImplementedError("{} doesn't implement polygons()".format(type(self).__name__))
 
-    def edges(self) -> list[tuple[Vec2, Vec2]]:
-        raise NotImplementedError(f"{type(self).__name__} doesn't implement edges()")
+    def edges(self):
+        raise NotImplementedError("{} doesn't implement edges()".format(type(self).__name__))
 
-    def bbox(self) -> "Rectangle":
+    def bbox(self):
         left, top, right, bottom = float("inf"), float("inf"), float("-inf"), float("-inf")
         for vertex in self.vertices():
             left = min(left, vertex.x)
@@ -40,11 +38,10 @@ class AbstractPolygon:
             bottom = max(bottom, vertex.y)
         return Rectangle(Vec2(left, top), Vec2(right, bottom))
 
-    def translated(self, translation: Vec2) -> "AbstractPolygon":
-        raise NotImplementedError(f"{type(self).__name__} doesn't implement translated()")
+    def translated(self, translation):
+        raise NotImplementedError("{} doesn't implement translated()".format(type(self).__name__))
 
-    def intersects(self, other: "AbstractPolygon", *, checkBBoxes: bool = False,
-                   checkEdges: bool = False) -> bool:
+    def intersects(self, other, *, checkBBoxes=False, checkEdges=False):
         if checkBBoxes:
             return self.bbox().intersects(other.bbox(), checkBBoxes=True)
         elif checkEdges:
@@ -62,7 +59,7 @@ class AbstractPolygon:
         else:
             raise ValueError("At least one of checkBBoxes or checkEdges must be True")
 
-    def centroid(self) -> Vec2:
+    def centroid(self):
         vertices = self.vertices()
         if not vertices:
             return Vec2(0, 0)
@@ -70,20 +67,20 @@ class AbstractPolygon:
         y = sum(v.y for v in vertices) / len(vertices)
         return Vec2(x, y)
 
-    def penetration_depth(self, other: "AbstractPolygon") -> float:
+    def penetration_depth(self, other):
         bbox1 = self.bbox()
         bbox2 = other.bbox()
         dx = min(bbox1.bottom_right.x - bbox2.top_left.x, bbox2.bottom_right.x - bbox1.top_left.x)
         dy = min(bbox1.bottom_right.y - bbox2.top_left.y, bbox2.bottom_right.y - bbox1.top_left.y)
         return min(dx, dy)
 
-    def copy_rotated(self, origin: Vec2, angle: float) -> "MultiPolygon":
-        polygons: list[Polygon] = []
+    def copy_rotated(self, origin, angle):
+        polygons = []  # list[Polygon]
         cos_a = math.cos(angle)
         sin_a = math.sin(angle)
 
         for poly in self.polygons():
-            vertices: list[Vec2] = poly.vertices().copy()
+            vertices = poly.vertices().copy()  # list[Vec2]
 
             for vertex in vertices:
                 # Posunout do souřadnic kolem originu
@@ -100,39 +97,34 @@ class AbstractPolygon:
 
 
 class Polygon(AbstractPolygon):
-    _vertices: list[Vec2]
-
-    def __init__(self, vertices: list[Vec2], translation: Vec2 | None = None) -> None:
+    def __init__(self, vertices, translation=None):
         super().__init__(translation)
         self._vertices = vertices
 
-    def vertices(self) -> list[Vec2]:
+    def vertices(self):
         return [vertex + self._translation for vertex in self._vertices]
 
-    def polygons(self) -> list["AbstractPolygon"]:
+    def polygons(self):
         return [self]
 
-    def edges(self) -> list[tuple[Vec2, Vec2]]:
-        vertices: list[Vec2] = self.vertices()
-        edges: list[tuple[Vec2, Vec2]] = []
+    def edges(self):
+        vertices = self.vertices()  # list[Vec2]
+        edges = [] # list[tuple[Vec2, Vec2]]
         for i in range(len(vertices) - 1):
             edges.append((vertices[i], vertices[i + 1]))
         return edges
 
-    def translated(self, translation: Vec2) -> "AbstractPolygon":
+    def translated(self, translation):
         return Polygon(self._vertices, self._translation + translation)
 
 
 class MultiPolygon(AbstractPolygon):
-    _polygons: list[AbstractPolygon]
-    _vertices: list[Vec2] | None
-
-    def __init__(self, polygons: list[AbstractPolygon], translation: Vec2 | None = None) -> None:
+    def __init__(self, polygons, translation=None) -> None:
         super().__init__(translation)
         self._polygons = polygons
         self._vertices = None
 
-    def vertices(self) -> list[Vec2]:
+    def vertices(self):
         if self._vertices is not None:
             return self._vertices
 
@@ -141,51 +133,49 @@ class MultiPolygon(AbstractPolygon):
             self._vertices.extend(polygon.translated(self._translation).vertices())
         return self._vertices
 
-    def polygons(self) -> list["AbstractPolygon"]:
+    def polygons(self):
         return [
             sub_poly
             for poly in self._polygons
             for sub_poly in poly.translated(self._translation).polygons()
         ]
 
-    def edges(self) -> list[tuple[Vec2, Vec2]]:
-        edges: list[tuple[Vec2, Vec2]] = []
+    def edges(self):
+        edges = [] # list[tuple[Vec2, Vec2]]
         for polygon in self.polygons():
             edges.extend(polygon.edges())
         return edges
 
-    def translated(self, translation: Vec2) -> "AbstractPolygon":
+    def translated(self, translation):
         return MultiPolygon(self._polygons, self._translation + translation)
 
 
 class Line(Polygon):
-    def __init__(self, start: Vec2, end: Vec2) -> None:
+    def __init__(self, start, end):
         super().__init__([start, end])
 
     @property
-    def start(self) -> Vec2:
+    def start(self):
         return self._vertices[0]
 
     @property
-    def end(self) -> Vec2:
+    def end(self):
         return self._vertices[1]
 
-    def translated(self, translation: Vec2) -> "AbstractPolygon":
+    def translated(self, translation):
         return Line(self.start + translation, self.end + translation)
 
 
 class MultiLine(MultiPolygon):
-    _polygons: list[Line]
-
-    def __init__(self, lines: list[Line], translation: Vec2 | None = None) -> None:
+    def __init__(self, lines, translation=None) -> None:
         super().__init__(lines, translation)
 
-    def translated(self, translation: Vec2) -> "AbstractPolygon":
+    def translated(self, translation):
         return MultiLine(self._polygons, self._translation + translation)
 
 
 class Rectangle(Polygon):
-    def __init__(self, top_left: Vec2, bottom_right: Vec2) -> None:
+    def __init__(self, top_left, bottom_right):
         super().__init__([
             # Top left, top right, bottom right, bottom left
             top_left,
@@ -196,31 +186,29 @@ class Rectangle(Polygon):
         ])
 
     @classmethod
-    def from_top_left_width_height(cls, top: Scalar, left: Scalar, width: Scalar,
-                                   height: Scalar) -> "Rectangle":
+    def from_top_left_width_height(cls, top, left, width, height):
         return cls(Vec2(left, top), Vec2(left + width, top + height))
 
     @property
-    def top_left(self) -> Vec2:
+    def top_left(self):
         return self._vertices[0]
 
     @property
-    def top_right(self) -> Vec2:
+    def top_right(self):
         return self._vertices[1]
 
     @property
-    def bottom_right(self) -> Vec2:
+    def bottom_right(self):
         return self._vertices[2]
 
     @property
-    def bottom_left(self) -> Vec2:
+    def bottom_left(self):
         return self._vertices[3]
 
-    def translated(self, translation: Vec2) -> "AbstractPolygon":
+    def translated(self, translation):
         return Rectangle(self.top_left + translation, self.bottom_right + translation)
 
-    def intersects(self, other: "AbstractPolygon", *, checkBBoxes: bool = False,
-                   checkEdges: bool = False) -> bool:
+    def intersects(self, other, *, checkBBoxes=False, checkEdges=False):
         if checkBBoxes and isinstance(other, Rectangle):
             return not (
                     self.bottom_right.x < other.top_left.x
