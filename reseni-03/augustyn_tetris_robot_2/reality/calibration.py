@@ -5,12 +5,12 @@ from augustyn_tetris_robot_2.utils import util_map
 
 CALIBRATION_OFF = 0
 CALIBRATION_HOME = 1
-CALIBRATION_DESK = 2
+CALIBRATION_FINAL = 2
 
 # @formatter:off
 # CALIBRATION = CALIBRATION_OFF
-CALIBRATION = CALIBRATION_HOME
-# CALIBRATION = CALIBRATION_DESK
+# CALIBRATION = CALIBRATION_HOME
+CALIBRATION = CALIBRATION_FINAL
 # @formatter:on
 
 if CALIBRATION == CALIBRATION_OFF:
@@ -23,7 +23,7 @@ def calibrated_color_sensor_reflection(raw):
         return raw
     elif CALIBRATION == CALIBRATION_HOME:
         return int(util_map(raw, 5, 77, 0, 100, True))
-    elif CALIBRATION == CALIBRATION_DESK:
-        return int(util_map(raw, 7, 73, 0, 100, True))
+    elif CALIBRATION == CALIBRATION_FINAL:
+        return int(util_map(raw, 12, 85, 0, 100, True))
     else:
         raise ValueError("Unknown calibration")
